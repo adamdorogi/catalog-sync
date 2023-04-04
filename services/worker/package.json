@@ -1,5 +1,15 @@
 {
   "name": "@catalog-sync/worker",
   "version": "0.1.0",
-  "private": true
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "start": "tsx src/main.ts"
+  },
+  "dependencies": {
+    "@catalog-sync/shared": "0.1.0",
+    "kafkajs": "2.2.4",
+    "pino": "8.11.0"
+  }
 }
