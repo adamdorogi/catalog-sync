@@ -4,13 +4,14 @@ import express, {type ErrorRequestHandler, type RequestHandler} from 'express';
 import {pino} from 'pino';
 import {z} from 'zod';
 import {
-  config, deleteProduct, getProductBySku, importCatalog, patchProduct, pool,
+  config, deleteProduct, getProductBySku, importCatalog, patchProduct, pool, setInventory,
 } from '@catalog-sync/shared';
-import {productCreateInput, productEditInput, skuInput} from './catalog-input.js';
+import {inventoryInput, productCreateInput, productEditInput, skuInput} from './catalog-input.js';
 import {HttpError, route} from './errors.js';
 
 export const logger = pino({name: 'catalog-api', level: process.env.LOG_LEVEL || 'info'});
 
+const inventoryEdit = z.object({sku: skuInput, inventory: inventoryInput});
 
 const readiness = route(async (_request, response) => {
   let ready = false;
@@ -93,6 +94,13 @@ export function createApp() {
   }));
   app.delete('/api/products/:sku', administrator, route(async (request, response) => {
     const product = await deleteProduct(skuInput.parse(request.params.sku));
+    if (!product) throw new HttpError(404, 'Product not found');
+    response.json({product});
+  }));
+  app.patch('/api/inventory', administrator, route(async (request, response) => {
+    const body = request.body;
+    const {sku, inventory} = inventoryEdit.parse({sku: body?.sku, inventory: body});
+    const product = await setInventory({sku, ...inventory});
     if (!product) throw new HttpError(404, 'Product not found');
     response.json({product});
   }));
