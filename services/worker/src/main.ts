@@ -1,9 +1,10 @@
 import { setTimeout as delay } from 'node:timers/promises';
 import { config, pool, runMigrations } from '@catalog-sync/shared';
 import { CATALOG_TOPIC, createKafka, ensureTopics } from '@catalog-sync/shared/kafka';
-import { CATALOG_ALIAS, catalogIndexDefinition, getAliasIndices, searchClient } from '@catalog-sync/shared/search-index';
+import { CATALOG_ALIAS, catalogIndexDefinition, getAliasIndices } from '@catalog-sync/shared/search-index';
+import { searchClient } from '@catalog-sync/shared/search-index';
 import { pino } from 'pino';
-import { indexMessage } from './indexer.js';
+import { indexBatch } from './indexer.js';
 import { relayBatch } from './relay.js';
 
 const logger = pino({ name: 'catalog-worker' });
@@ -16,10 +17,10 @@ const consumer = kafka.consumer({
   sessionTimeout: config.kafkaSessionTimeout,
   heartbeatInterval: config.kafkaHeartbeatInterval,
   maxBytes: 4 * 1024 * 1024,
+  maxBytesPerPartition: 256 * 1024,
   maxWaitTimeInMs: 250,
 });
 const { signal } = stop;
-
 
 consumer.on(consumer.events.CRASH, ({ payload }) => {
   logger.error({ err: payload.error, restart: payload.restart }, 'consumer crashed');
@@ -57,7 +58,7 @@ async function main(): Promise<void> {
   try {
     await runMigrations();
     await ensureTopics();
-    if ((await getAliasIndices()).length === 0) {
+    if (!(await getAliasIndices()).length) {
       await searchClient.indices.create({
         index: 'catalog_v_1',
         body: { ...catalogIndexDefinition, aliases: { [CATALOG_ALIAS]: { is_write_index: true } } },
@@ -66,7 +67,21 @@ async function main(): Promise<void> {
     await producer.connect();
     await consumer.connect();
     await consumer.subscribe({ topic: CATALOG_TOPIC, fromBeginning: true });
-    await consumer.run({ eachMessage: indexMessage });
+    await consumer.run({
+      autoCommit: false,
+      eachBatchAutoResolve: false,
+      eachBatch: (payload) => indexBatch(
+        payload,
+        producer,
+        (nextOffset) => consumer.commitOffsets([{
+          topic: payload.batch.topic,
+          partition: payload.batch.partition,
+          offset: nextOffset,
+        }]),
+        config.kafkaHeartbeatInterval,
+        signal
+      ),
+    });
     logger.info({ group: config.kafkaGroupId }, 'worker ready');
     const running = [
       runLoop('relay', 120, async () => (await relayBatch(producer)) > 0),
