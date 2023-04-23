@@ -1,5 +1,6 @@
 import type { EachBatchPayload, KafkaMessage, Producer } from 'kafkajs';
 import { eventSchema, type CatalogEvent } from '@catalog-sync/shared';
+import { saveDlq } from '@catalog-sync/shared/pipeline-ops';
 import { CATALOG_ALIAS, bulkIndex, prepareIndexWrites } from '@catalog-sync/shared/search-index';
 
 interface Source {
@@ -111,7 +112,6 @@ export async function indexBatch(
     for (const { source, reason } of rejected) {
       await saveDlq(source, reason, producer);
     }
-    if (rejected.length) throw new Error(rejected[0].reason);
     if (heartbeatError) {
       throw heartbeatError;
     }
