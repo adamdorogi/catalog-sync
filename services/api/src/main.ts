@@ -1,4 +1,5 @@
 import {config, pool} from '@catalog-sync/shared';
+import {searchClient} from '@catalog-sync/shared/search-index';
 import {createApp, logger} from './app.js';
 
 const server = createApp().listen(config.port, () => logger.info({port: config.port}, 'api listening'));
@@ -8,7 +9,7 @@ function stop() {
   if (stopping) return;
   stopping = true;
   server.close(() => {
-    void Promise.allSettled([pool.end()]).then((results) => {
+    void Promise.allSettled([pool.end(), searchClient.close()]).then((results) => {
       for (const result of results) {
         if (result.status === 'rejected') {
           logger.error({err: result.reason}, 'connection close failed');

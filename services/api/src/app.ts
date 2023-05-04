@@ -8,6 +8,8 @@ import {
 } from '@catalog-sync/shared';
 import {inventoryInput, productCreateInput, productEditInput, skuInput} from './catalog-input.js';
 import {HttpError, route} from './errors.js';
+import {searchParams} from './search-params.js';
+import {getSearchDocument, searchCatalog} from './search.js';
 
 export const logger = pino({name: 'catalog-api', level: process.env.LOG_LEVEL || 'info'});
 
@@ -73,6 +75,15 @@ export function createApp() {
 
   app.get('/healthz', (_request, response) => response.json({ok: true}));
   app.get(['/readyz', '/api/health'], readiness);
+  app.get('/api/search', route(async (request, response) => {
+    response.json(await searchCatalog(searchParams.parse(request.query)));
+  }));
+  app.get('/api/search/documents/:id', route(async (request, response) => {
+    const document = await getSearchDocument(z.string().uuid().parse(request.params.id));
+    if (!document) throw new HttpError(404, 'Indexed product not found');
+    response.json({document});
+  }));
+
   app.get('/api/products/:sku', route(async (request, response) => {
     const product = await getProductBySku(skuInput.parse(request.params.sku));
     if (!product) throw new HttpError(404, 'Product not found');
