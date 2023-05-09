@@ -16,6 +16,16 @@ export const searchClient = new Client({
 });
 
 const keyword = { type: 'keyword' };
+const prefix = {
+  ...keyword,
+  fields: {
+    prefix: {
+      type: 'text',
+      analyzer: 'part_prefix',
+      search_analyzer: 'part_exact',
+    },
+  },
+};
 const integer = { type: 'integer' };
 
 export const catalogIndexDefinition = {
@@ -24,6 +34,27 @@ export const catalogIndexDefinition = {
       number_of_shards: Number(process.env.OPENSEARCH_PRIMARY_SHARDS ?? 1),
       number_of_replicas: Number(process.env.OPENSEARCH_REPLICAS ?? 0),
       refresh_interval: '500ms',
+      max_ngram_diff: 31,
+    },
+    analysis: {
+      char_filter: {
+        part_punctuation: { type: 'pattern_replace', pattern: '[^\\p{L}\\p{N}]', replacement: '' },
+      },
+      filter: {
+        part_edge: { type: 'edge_ngram', min_gram: 1, max_gram: 32 },
+      },
+      analyzer: {
+        part_exact: {
+          tokenizer: 'keyword',
+          char_filter: ['part_punctuation'],
+          filter: ['lowercase'],
+        },
+        part_prefix: {
+          tokenizer: 'keyword',
+          char_filter: ['part_punctuation'],
+          filter: ['lowercase', 'part_edge'],
+        },
+      },
     },
   },
   mappings: {
@@ -33,9 +64,9 @@ export const catalogIndexDefinition = {
       revision: { type: 'long' },
       sku: { type: 'text', fields: { keyword } },
       mpn: { type: 'text' },
-      skuNormalized: keyword,
-      mpnNormalized: keyword,
-      partNumbers: keyword,
+      skuNormalized: prefix,
+      mpnNormalized: prefix,
+      partNumbers: prefix,
       title: { type: 'text' },
       description: { type: 'text' },
       brand: keyword,

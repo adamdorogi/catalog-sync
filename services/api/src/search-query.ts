@@ -111,6 +111,9 @@ export function lexicalClause(q: string): Clause {
       {term: {skuNormalized: {value: normalized, boost: 300}}},
       {term: {mpnNormalized: {value: normalized, boost: 160}}},
       {term: {partNumbers: {value: normalized, boost: 90}}},
+      {term: {'skuNormalized.prefix': {value: normalized, boost: 28}}},
+      {term: {'mpnNormalized.prefix': {value: normalized, boost: 24}}},
+      {term: {'partNumbers.prefix': {value: normalized, boost: 20}}},
     );
   }
   return {bool: {should, minimum_should_match: 1}};
