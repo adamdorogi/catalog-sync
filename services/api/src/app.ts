@@ -1,18 +1,24 @@
 import {timingSafeEqual} from 'node:crypto';
 import cors from 'cors';
 import express, {type ErrorRequestHandler, type RequestHandler} from 'express';
+import multer from 'multer';
 import {pino} from 'pino';
 import {z} from 'zod';
 import {
   config, deleteProduct, getProductBySku, importCatalog, patchProduct, pool, setInventory,
 } from '@catalog-sync/shared';
 import {inventoryInput, productCreateInput, productEditInput, skuInput} from './catalog-input.js';
+import {readSupplierCsv} from './csv.js';
 import {HttpError, route} from './errors.js';
 import {searchParams} from './search-params.js';
 import {getSearchDocument, searchCatalog} from './search.js';
 
 export const logger = pino({name: 'catalog-api', level: process.env.LOG_LEVEL || 'info'});
 
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {fileSize: 8 * 1024 * 1024, files: 1, fields: 0, parts: 2},
+});
 const inventoryEdit = z.object({sku: skuInput, inventory: inventoryInput});
 
 const readiness = route(async (_request, response) => {
@@ -49,6 +55,10 @@ const handleError: ErrorRequestHandler = (error, request, response, next) => {
   }
   if (error instanceof z.ZodError) {
     response.status(400).json({error: 'Invalid request', issues: error.issues});
+    return;
+  }
+  if (error instanceof multer.MulterError) {
+    response.status(error.code === 'LIMIT_FILE_SIZE' ? 413 : 400).json({error: error.message});
     return;
   }
   if (error.type === 'entity.parse.failed' || error.type === 'entity.too.large') {
@@ -115,6 +125,12 @@ export function createApp() {
     if (!product) throw new HttpError(404, 'Product not found');
     response.json({product});
   }));
+  app.post('/api/imports/csv', administrator, upload.single('file'), route(async (request, response) => {
+    if (!request.file) throw new HttpError(400, 'CSV file required');
+    const rows = await readSupplierCsv(request.file.buffer);
+    response.json(await importCatalog(rows));
+  }));
+
   app.use((_request, _response, next) => next(new HttpError(404, 'Route not found')));
   app.use(handleError);
   return app;
