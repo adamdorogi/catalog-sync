@@ -1,7 +1,7 @@
 import { setTimeout as delay } from 'node:timers/promises';
 import { config, pool, runMigrations } from '@catalog-sync/shared';
 import { CATALOG_TOPIC, createKafka, ensureTopics } from '@catalog-sync/shared/kafka';
-import { CATALOG_ALIAS, catalogIndexDefinition, getAliasIndices } from '@catalog-sync/shared/search-index';
+import { ensureCatalogIndex, runReindexJob } from '@catalog-sync/shared/reindex';
 import { searchClient } from '@catalog-sync/shared/search-index';
 import { pino } from 'pino';
 import { indexBatch } from './indexer.js';
@@ -58,12 +58,7 @@ async function main(): Promise<void> {
   try {
     await runMigrations();
     await ensureTopics();
-    if (!(await getAliasIndices()).length) {
-      await searchClient.indices.create({
-        index: 'catalog_v_1',
-        body: { ...catalogIndexDefinition, aliases: { [CATALOG_ALIAS]: { is_write_index: true } } },
-      });
-    }
+    await ensureCatalogIndex();
     await producer.connect();
     await consumer.connect();
     await consumer.subscribe({ topic: CATALOG_TOPIC, fromBeginning: true });
@@ -85,6 +80,7 @@ async function main(): Promise<void> {
     logger.info({ group: config.kafkaGroupId }, 'worker ready');
     const running = [
       runLoop('relay', 120, async () => (await relayBatch(producer)) > 0),
+      runLoop('reindex', 400, () => runReindexJob(signal)),
     ];
     const stopConsumer = new Promise<void>((resolve, reject) => {
       const disconnect = () => { void consumer.disconnect().then(resolve, reject); };

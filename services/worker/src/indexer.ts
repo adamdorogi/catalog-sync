@@ -1,7 +1,8 @@
 import type { EachBatchPayload, KafkaMessage, Producer } from 'kafkajs';
-import { eventSchema, type CatalogEvent } from '@catalog-sync/shared';
+import { eventSchema, withTransaction, type CatalogEvent } from '@catalog-sync/shared';
 import { saveDlq } from '@catalog-sync/shared/pipeline-ops';
-import { CATALOG_ALIAS, bulkIndex, prepareIndexWrites } from '@catalog-sync/shared/search-index';
+import { failIndexTarget, readWriteTargets } from '@catalog-sync/shared/reindex';
+import { bulkIndex, prepareIndexWrites } from '@catalog-sync/shared/search-index';
 
 interface Source {
   topic: string;
@@ -104,10 +105,19 @@ export async function indexBatch(
     }
     const sources = new Map(deliveries.map(({ event, source }) => [event.productId, source]));
     if (writes.length > 0) {
-      const live = await bulkIndex(CATALOG_ALIAS, writes);
-      for (const item of live.failures) {
-        rejected.push({ source: sources.get(item.id)!, reason: item.reason });
-      }
+      await withTransaction(async (db) => {
+        const [current, mirror] = await readWriteTargets(db);
+        const live = await bulkIndex(current, writes);
+        for (const item of live.failures) {
+          rejected.push({ source: sources.get(item.id)!, reason: item.reason });
+        }
+        if (mirror) {
+          const shadow = await bulkIndex(mirror, writes);
+          if (shadow.failures.length > 0) {
+            await failIndexTarget(db, mirror, shadow.failures[0].reason);
+          }
+        }
+      });
     }
     for (const { source, reason } of rejected) {
       await saveDlq(source, reason, producer);
