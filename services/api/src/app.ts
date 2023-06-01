@@ -7,6 +7,7 @@ import {z} from 'zod';
 import {
   config, deleteProduct, getProductBySku, importCatalog, patchProduct, pool, setInventory,
 } from '@catalog-sync/shared';
+import {getReindexProgress, requestReindex} from '@catalog-sync/shared/reindex';
 import {inventoryInput, productCreateInput, productEditInput, skuInput} from './catalog-input.js';
 import {readSupplierCsv} from './csv.js';
 import {HttpError, route} from './errors.js';
@@ -131,6 +132,12 @@ export function createApp() {
     response.json(await importCatalog(rows));
   }));
 
+  app.post('/api/admin/reindex', administrator, route(async (_request, response) => {
+    response.status(202).json({job: await requestReindex()});
+  }));
+  app.get('/api/admin/reindex', route(async (_request, response) => {
+    response.json({job: await getReindexProgress()});
+  }));
   app.use((_request, _response, next) => next(new HttpError(404, 'Route not found')));
   app.use(handleError);
   return app;
