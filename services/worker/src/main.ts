@@ -81,6 +81,10 @@ async function main(): Promise<void> {
     const running = [
       runLoop('relay', 120, async () => (await relayBatch(producer)) > 0),
       runLoop('reindex', 400, () => runReindexJob(signal)),
+      runLoop('metric retention', 60_000, async () => {
+        await pool.query("DELETE FROM bulk_index_samples WHERE created_at < now() - interval '15 minutes'");
+        return false;
+      }),
     ];
     const stopConsumer = new Promise<void>((resolve, reject) => {
       const disconnect = () => { void consumer.disconnect().then(resolve, reject); };

@@ -117,6 +117,10 @@ export async function indexBatch(
             await failIndexTarget(db, mirror, shadow.failures[0].reason);
           }
         }
+        await db.query(
+          'INSERT INTO bulk_index_samples (indexed_count, duration_ms) VALUES ($1, $2)',
+          [live.indexed, live.durationMs]
+        );
       });
     }
     for (const { source, reason } of rejected) {
