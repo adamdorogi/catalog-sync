@@ -11,6 +11,8 @@ import {getReindexProgress, requestReindex} from '@catalog-sync/shared/reindex';
 import {inventoryInput, productCreateInput, productEditInput, skuInput} from './catalog-input.js';
 import {readSupplierCsv} from './csv.js';
 import {HttpError, route} from './errors.js';
+import {createMetrics} from './metrics.js';
+import {readOps} from './ops.js';
 import {searchParams} from './search-params.js';
 import {getSearchDocument, searchCatalog} from './search.js';
 
@@ -83,9 +85,15 @@ export function createApp() {
   app.disable('x-powered-by');
   if (config.corsOrigin) app.use(cors({origin: config.corsOrigin}));
   app.use(express.json({limit: '512kb'}));
+  const metrics = createMetrics();
+  app.use(metrics.observe);
 
   app.get('/healthz', (_request, response) => response.json({ok: true}));
   app.get(['/readyz', '/api/health'], readiness);
+  app.get('/metrics', route(async (_request, response) => {
+    response.set('content-type', metrics.contentType).send(await metrics.scrape());
+  }));
+
   app.get('/api/search', route(async (request, response) => {
     response.json(await searchCatalog(searchParams.parse(request.query)));
   }));
@@ -132,6 +140,7 @@ export function createApp() {
     response.json(await importCatalog(rows));
   }));
 
+  app.get('/api/ops/stats', route(async (_request, response) => response.json(await readOps())));
   app.post('/api/admin/reindex', administrator, route(async (_request, response) => {
     response.status(202).json({job: await requestReindex()});
   }));
