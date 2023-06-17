@@ -5,8 +5,9 @@ import multer from 'multer';
 import {pino} from 'pino';
 import {z} from 'zod';
 import {
-  config, deleteProduct, getProductBySku, importCatalog, patchProduct, pool, setInventory,
+  burstCatalog, config, deleteProduct, getProductBySku, importCatalog, patchProduct, pool, setInventory,
 } from '@catalog-sync/shared';
+import {discardDlq, listDlq, replayDlq} from '@catalog-sync/shared/pipeline-ops';
 import {getReindexProgress, requestReindex} from '@catalog-sync/shared/reindex';
 import {inventoryInput, productCreateInput, productEditInput, skuInput} from './catalog-input.js';
 import {readSupplierCsv} from './csv.js';
@@ -23,6 +24,9 @@ const upload = multer({
   limits: {fileSize: 8 * 1024 * 1024, files: 1, fields: 0, parts: 2},
 });
 const inventoryEdit = z.object({sku: skuInput, inventory: inventoryInput});
+const burstInput = z.object({count: z.number().int().min(1).max(5_000).default(500)});
+const dlqLimit = z.coerce.number().int().min(1).max(500).default(100);
+const dlqId = z.string().regex(/^[1-9][0-9]{0,17}$/);
 
 const readiness = route(async (_request, response) => {
   let ready = false;
@@ -147,6 +151,23 @@ export function createApp() {
   app.get('/api/admin/reindex', route(async (_request, response) => {
     response.json({job: await getReindexProgress()});
   }));
+  app.post('/api/admin/burst', administrator, route(async (request, response) => {
+    response.status(202).json(await burstCatalog(burstInput.parse(request.body ?? {}).count));
+  }));
+  app.get('/api/admin/dlq', administrator, route(async (request, response) => {
+    response.json({messages: await listDlq(dlqLimit.parse(request.query.limit))});
+  }));
+  app.post('/api/admin/dlq/:id/replay', administrator, route(async (request, response) => {
+    const id = dlqId.parse(request.params.id);
+    if (!await replayDlq(id)) throw new HttpError(409, 'Message is no longer pending');
+    response.json({id, status: 'REPLAYED'});
+  }));
+  app.post('/api/admin/dlq/:id/discard', administrator, route(async (request, response) => {
+    const id = dlqId.parse(request.params.id);
+    if (!await discardDlq(id)) throw new HttpError(409, 'Message is no longer pending');
+    response.json({id, status: 'DISCARDED'});
+  }));
+
   app.use((_request, _response, next) => next(new HttpError(404, 'Route not found')));
   app.use(handleError);
   return app;
