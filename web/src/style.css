@@ -1,0 +1,54 @@
+body {
+  background: #f8f9fa;
+}
+
+.shell {
+  max-width: 1560px;
+  padding-inline: 1.25rem;
+}
+
+.card {
+  border-radius: 4px;
+}
+
+.card-header {
+  background: #f1f3f5;
+}
+
+.navbar-nav .nav-link.active {
+  text-decoration: underline;
+  text-underline-offset: .35em;
+}
+
+.catalog-table th,
+.catalog-table td {
+  padding: .43rem .55rem;
+  vertical-align: middle;
+}
+
+.catalog-table code {
+  color: #25476f;
+  white-space: nowrap;
+}
+
+.facet-options {
+  max-height: 13.5rem;
+  overflow-y: auto;
+}
+
+.detail-json {
+  max-height: 43vh;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.lag-bar {
+  min-width: 6rem;
+}
+
+@media (min-width: 992px) {
+  .navbar-expand-lg .navbar-nav .nav-link {
+    padding-inline: 1rem;
+  }
+}
