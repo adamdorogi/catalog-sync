@@ -5,6 +5,7 @@ import { Badge, Container, Nav, Navbar } from 'react-bootstrap'
 import 'bootstrap/dist/css/bootstrap.min.css'
 import 'bootstrap-icons/font/bootstrap-icons.css'
 import './style.css'
+import { CatalogSearch } from './search.js'
 
 function App() {
   return (
@@ -24,7 +25,9 @@ function App() {
         </Container>
       </Navbar>
       <Container as="main" fluid className="shell py-3">
-        <h1 className="h4">Catalog Search</h1>
+        <Routes>
+          <Route path="/" element={<CatalogSearch />} />
+        </Routes>
       </Container>
     </>
   )
