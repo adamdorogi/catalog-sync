@@ -1,7 +1,8 @@
 import { useEffect, useId, useState } from 'react'
-import { Alert, Button, Card, Col, Form, InputGroup, Row, Spinner, Table } from 'react-bootstrap'
+import { Alert, Button, Card, Col, Form, InputGroup, Row, Spinner, Stack, Table } from 'react-bootstrap'
 import { amount, api, errorMessage, formatPrice } from './api.js'
 import type { Bucket, Hit, SearchResult, Tier } from './api.js'
+import { EditProduct } from './product-dialogs.js'
 
 const warehouses = ['BNE-01', 'SYD-02', 'MEL-01']
 const pageSize = 25
@@ -41,8 +42,9 @@ function Facet({ title, buckets, selected, onToggle }: {
   )
 }
 
-function ProductRow({ hit }: {
+function ProductRow({ hit, onEdit }: {
   hit: Hit
+  onEdit: (hit: Hit) => void
 }) {
   const stock = new Map(hit.product.inventory.map((item) => [
     item.warehouseCode,
@@ -60,6 +62,16 @@ function ProductRow({ hit }: {
       <td>{hit.product.category}</td>
       <td className="text-nowrap small">{warehouses.map((code) => amount(stock.get(code) ?? 0)).join(' / ')}</td>
       <td className="text-end text-nowrap">{formatPrice(hit.unitPriceCents)}</td>
+      <td>
+        <Stack direction="horizontal" gap={1}>
+          <Button
+            size="sm" variant="outline-primary" onClick={() => onEdit(hit)}
+            aria-label={`Quick edit stock or price for ${hit.product.sku}`}
+          >
+            <i className="bi bi-pencil-square me-1" aria-hidden="true" /> Edit
+          </Button>
+        </Stack>
+      </td>
     </tr>
   )
 }
@@ -80,6 +92,8 @@ export function CatalogSearch() {
   const [result, setResult] = useState<SearchResult>()
   const [pending, setPending] = useState(true)
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+  const [editing, setEditing] = useState<Hit>()
 
   useEffect(() => {
     const controller = new AbortController()
@@ -238,14 +252,15 @@ export function CatalogSearch() {
                   <th scope="col">Category</th>
                   <th scope="col" className="text-nowrap">Stock <small>(BNE / SYD / MEL)</small></th>
                   <th scope="col" className="text-end text-nowrap">Tier Price</th>
-                        </tr>
+                  <th scope="col">Actions</th>
+                </tr>
               </thead>
               <tbody>
                 {result?.hits.map((hit) => (
-                  <ProductRow key={hit.product.id} hit={hit}  />
+                  <ProductRow key={hit.product.id} hit={hit} onEdit={setEditing} />
                 ))}
                 {result?.hits.length === 0 && (
-                  <tr><td colSpan={6} className="text-muted py-3">No matching products.</td></tr>
+                  <tr><td colSpan={7} className="text-muted py-3">No matching products.</td></tr>
                 )}
               </tbody>
             </Table>
@@ -274,7 +289,6 @@ export function CatalogSearch() {
             setRefresh((value) => value + 1)
           }} />
       )}
-      {explaining && <ExplainScore hit={explaining} onHide={() => setExplaining(undefined)} />}
     </>
   )
 }
