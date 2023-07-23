@@ -6,6 +6,7 @@ import 'bootstrap/dist/css/bootstrap.min.css'
 import 'bootstrap-icons/font/bootstrap-icons.css'
 import './style.css'
 import { CatalogSearch } from './search.js'
+import { Pipeline } from './pipeline.js'
 
 function App() {
   return (
@@ -20,6 +21,7 @@ function App() {
           <Navbar.Collapse id="site-nav">
             <Nav>
               <Nav.Link as={NavLink} to="/" end>Catalog Search</Nav.Link>
+              <Nav.Link as={NavLink} to="/pipeline">Pipeline & Lag</Nav.Link>
             </Nav>
           </Navbar.Collapse>
         </Container>
@@ -27,6 +29,7 @@ function App() {
       <Container as="main" fluid className="shell py-3">
         <Routes>
           <Route path="/" element={<CatalogSearch />} />
+          <Route path="/pipeline" element={<Pipeline />} />
         </Routes>
       </Container>
     </>
