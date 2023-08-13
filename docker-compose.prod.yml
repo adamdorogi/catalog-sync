@@ -1,0 +1,144 @@
+name: catalog-sync
+
+x-service: &service
+  image: catalog-sync-service:local
+  build:
+    context: .
+    dockerfile: docker/Dockerfile.service
+  environment: &app-env
+    NODE_ENV: production
+    API_PORT: 4000
+    DATABASE_URL: ${PROD_DATABASE_URL:-postgres://catalog:catalog@postgres:5432/catalog}
+    KAFKA_BROKERS: ${PROD_KAFKA_BROKERS:-redpanda:29092}
+    KAFKA_PARTITIONS: ${KAFKA_PARTITIONS:-6}
+    KAFKA_GROUP_ID: ${KAFKA_GROUP_ID:-catalog-search-v1}
+    KAFKA_CREATE_TOPICS: ${KAFKA_CREATE_TOPICS:-true}
+    KAFKA_TLS: ${KAFKA_TLS:-false}
+    KAFKA_SASL_MECHANISM: ${KAFKA_SASL_MECHANISM:-plain}
+    KAFKA_SASL_USERNAME: ${KAFKA_SASL_USERNAME:-}
+    KAFKA_SASL_PASSWORD: ${KAFKA_SASL_PASSWORD:-}
+    OPENSEARCH_NODE: ${PROD_OPENSEARCH_NODE:-http://opensearch:9200}
+    OPENSEARCH_USERNAME: ${OPENSEARCH_USERNAME:-}
+    OPENSEARCH_PASSWORD: ${OPENSEARCH_PASSWORD:-}
+    OPENSEARCH_TLS_REJECT_UNAUTHORIZED: ${OPENSEARCH_TLS_REJECT_UNAUTHORIZED:-true}
+    EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-local}
+    EMBEDDING_CACHE_DIR: /app/.cache/embeddings
+    EMBEDDING_LOCAL_FILES_ONLY: ${EMBEDDING_LOCAL_FILES_ONLY:-false}
+    OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    API_ADMIN_TOKEN: ${API_ADMIN_TOKEN:-}
+  volumes:
+    - embeddings:/app/.cache
+  restart: unless-stopped
+  init: true
+  mem_limit: 1024m
+
+services:
+  postgres:
+    image: postgres:14-alpine
+    environment:
+      POSTGRES_DB: catalog
+      POSTGRES_USER: catalog
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-catalog}
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    restart: unless-stopped
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U catalog -d catalog"]
+      interval: 3s
+      timeout: 3s
+      retries: 25
+
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v23.1.13
+    command:
+      - redpanda
+      - start
+      - --overprovisioned
+      - --smp=1
+      - --memory=512M
+      - --reserve-memory=0M
+      - --kafka-addr=0.0.0.0:29092
+      - --advertise-kafka-addr=redpanda:29092
+    volumes:
+      - redpanda:/var/lib/redpanda/data
+    restart: unless-stopped
+    mem_limit: 1024m
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health --exit-when-healthy"]
+      interval: 5s
+      timeout: 4s
+      retries: 30
+
+  opensearch:
+    image: opensearchproject/opensearch:2.6.0
+    environment:
+      discovery.type: single-node
+      DISABLE_INSTALL_DEMO_CONFIG: "true"
+      DISABLE_SECURITY_PLUGIN: "true"
+      OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"
+    volumes:
+      - opensearch:/usr/share/opensearch/data
+    restart: unless-stopped
+    mem_limit: 1600m
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS 'http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=3s'"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  migrate:
+    <<: *service
+    command: ["npm", "run", "db:migrate"]
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    <<: *service
+    command: ["./node_modules/.bin/tsx", "services/api/src/main.ts"]
+    depends_on: &app-deps
+      migrate:
+        condition: service_completed_successfully
+      redpanda:
+        condition: service_healthy
+      opensearch:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:4000/api/health"]
+      interval: 5s
+      timeout: 4s
+      retries: 20
+
+  worker:
+    <<: *service
+    command: ["./node_modules/.bin/tsx", "services/worker/src/main.ts"]
+    depends_on: *app-deps
+    stop_grace_period: 30s
+
+  web:
+    image: catalog-sync-web:local
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.web
+      args:
+        VITE_CATALOG_ENV: ${VITE_CATALOG_ENV:-PROD}
+    ports:
+      - "127.0.0.1:${CATALOG_WEB_PORT:-8080}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    mem_limit: 128m
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]
+      interval: 10s
+      timeout: 4s
+      retries: 10
+
+volumes:
+  postgres:
+  redpanda:
+  opensearch:
+  embeddings:

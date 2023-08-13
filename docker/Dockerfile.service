@@ -1,0 +1,24 @@
+FROM node:18-alpine AS deps
+WORKDIR /app
+ENV SHARP_IGNORE_GLOBAL_LIBVIPS=1
+COPY package.json package-lock.json ./
+COPY packages/shared/package.json packages/shared/
+COPY services/api/package.json services/api/
+COPY services/worker/package.json services/worker/
+COPY web/package.json web/
+RUN npm ci --no-audit --no-fund \
+    --workspace @catalog-sync/shared --workspace @catalog-sync/api \
+    --workspace @catalog-sync/worker --include-workspace-root
+FROM node:18-alpine
+RUN apk add --no-cache libstdc++
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --chown=node:node --from=deps /app/ /app/
+COPY --chown=node:node packages/ packages/
+COPY --chown=node:node services/ services/
+COPY --chown=node:node scripts/ scripts/
+COPY --chown=node:node sql/ sql/
+RUN mkdir -p .cache/embeddings && chown -R node:node .cache
+USER node
+EXPOSE 4000
+CMD ["./node_modules/.bin/tsx", "services/api/src/main.ts"]
