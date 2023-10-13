@@ -22,6 +22,9 @@ const consumer = kafka.consumer({
 });
 const { signal } = stop;
 
+process.once('SIGTERM', () => stop.abort());
+process.once('SIGINT', () => stop.abort());
+
 consumer.on(consumer.events.CRASH, ({ payload }) => {
   logger.error({ err: payload.error, restart: payload.restart }, 'consumer crashed');
   if (!payload.restart) {
