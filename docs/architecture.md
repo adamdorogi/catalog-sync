@@ -55,7 +55,9 @@ tombstones keep old updates from reviving deleted products.
 
 Bulk HTTP success can include failed items. Transient errors leave the offset
 uncommitted until recovered. Permanent mapping or payload errors go to the DLQ.
-Replay preserves the original revision.
+Replay preserves the original revision. The consumer heartbeats during long
+batches and leaves the group on SIGTERM. Defaults are a 30s session timeout and
+a 3s heartbeat interval.
 
 ## alias rotation
 
