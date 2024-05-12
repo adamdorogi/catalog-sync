@@ -37,6 +37,17 @@ function kafkaSasl() {
   }
 }
 
+function embeddingProvider(): 'local' | 'openai' {
+  const provider = process.env.EMBEDDING_PROVIDER || (process.env.OPENAI_API_KEY ? 'openai' : 'local');
+  if (provider !== 'local' && provider !== 'openai') {
+    throw new Error('EMBEDDING_PROVIDER must be local or openai');
+  }
+  if (provider === 'openai' && !process.env.OPENAI_API_KEY) {
+    throw new Error('OPENAI_API_KEY is required by the openai embedding provider');
+  }
+  return provider;
+}
+
 export const config = {
   databaseUrl: process.env.DATABASE_URL || 'postgres://catalog:catalog@127.0.0.1:5432/catalog',
   kafkaBrokers: (process.env.KAFKA_BROKERS || '127.0.0.1:9092').split(',').map((broker) => broker.trim()).filter(Boolean),
@@ -50,6 +61,9 @@ export const config = {
   openSearchUsername: process.env.OPENSEARCH_USERNAME,
   openSearchPassword: process.env.OPENSEARCH_PASSWORD,
   openSearchTlsRejectUnauthorized: flag('OPENSEARCH_TLS_REJECT_UNAUTHORIZED', true),
+  embeddingProvider: embeddingProvider(),
+  openAiApiKey: process.env.OPENAI_API_KEY,
+  embeddingCacheDir: process.env.EMBEDDING_CACHE_DIR,
   port: integer('API_PORT', 4000),
   nodeEnv: process.env.NODE_ENV || 'development',
   apiAdminToken: process.env.API_ADMIN_TOKEN,

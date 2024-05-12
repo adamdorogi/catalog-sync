@@ -21,7 +21,8 @@
     "simulate:load": "tsx scripts/simulate-load.ts",
     "dev": "node scripts/dev.mjs",
     "dev:web": "npm run dev -w @catalog-sync/web",
-    "build": "npm run build -w @catalog-sync/web"
+    "build": "npm run build -w @catalog-sync/web",
+    "eval:search": "tsx scripts/eval-search.ts"
   },
   "devDependencies": {
     "@types/node": "18.15.11",
