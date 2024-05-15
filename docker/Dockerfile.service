@@ -1,4 +1,4 @@
-FROM node:18-alpine AS deps
+FROM node:18-bookworm-slim AS deps
 WORKDIR /app
 ENV SHARP_IGNORE_GLOBAL_LIBVIPS=1
 COPY package.json package-lock.json ./
@@ -9,8 +9,7 @@ COPY web/package.json web/
 RUN npm ci --no-audit --no-fund \
     --workspace @catalog-sync/shared --workspace @catalog-sync/api \
     --workspace @catalog-sync/worker --include-workspace-root
-FROM node:18-alpine
-RUN apk add --no-cache libstdc++
+FROM node:18-bookworm-slim
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --chown=node:node --from=deps /app/ /app/

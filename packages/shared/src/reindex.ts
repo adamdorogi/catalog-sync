@@ -8,6 +8,7 @@ import {
   catalogIndexDefinition,
   getAliasIndices,
   prepareIndexWrites,
+  readSearchEmbeddings,
   searchClient,
 } from './search-index.js';
 
@@ -155,7 +156,8 @@ async function rebuild(job: ReindexJob, signal: AbortSignal): Promise<void> {
         ? { ...id, type: 'UPSERT', document: doc }
         : { ...id, type: 'DELETE', document: null };
     });
-    const result = await bulkIndex(index, await prepareIndexWrites(events));
+    const existing = await readSearchEmbeddings(documents);
+    const result = await bulkIndex(index, await prepareIndexWrites(events, existing, signal));
     if (result.failures.length > 0) {
       throw new Error(result.failures[0].reason);
     }

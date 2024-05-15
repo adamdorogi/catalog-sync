@@ -1,5 +1,6 @@
 import { Client } from '@opensearch-project/opensearch';
 import { config } from './config.js';
+import { embeddingModel, embedMany } from './embeddings.js';
 import type { CatalogDocument, CatalogEvent } from './events.js';
 import { normalizeSku } from './events.js';
 
@@ -35,6 +36,7 @@ export const catalogIndexDefinition = {
       number_of_replicas: Number(process.env.OPENSEARCH_REPLICAS ?? 0),
       refresh_interval: '500ms',
       max_ngram_diff: 31,
+      knn: true,
     },
     analysis: {
       char_filter: {
@@ -92,6 +94,16 @@ export const catalogIndexDefinition = {
       },
       basePriceCents: integer,
       availableStock: { type: 'long' },
+      embedding: {
+        type: 'knn_vector',
+        dimension: 384,
+        method: {
+          name: 'hnsw',
+          engine: 'lucene',
+          space_type: 'l2',
+          parameters: { ef_construction: 100, m: 16 },
+        },
+      },
     },
   },
 };
@@ -137,19 +149,56 @@ function searchDocument(document: CatalogDocument): Record<string, unknown> {
   };
 }
 
+function semanticText(document: CatalogDocument): string {
+  const attributes = Object.entries(document.attributes)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([name, value]) => `${name} ${value}`);
+  return [document.title, document.category, ...attributes, document.description, document.brand]
+    .filter(Boolean)
+    .join(' ')
+    .slice(0, 1500);
+}
+
+export async function readSearchEmbeddings(documents: CatalogDocument[]): Promise<Map<string, number[]>> {
+  const revisions = new Map(documents.filter((doc) => doc.active).map((doc) => [doc.id, doc.revision]));
+  if (!revisions.size) {
+    return new Map();
+  }
+  const { body } = await searchClient.mget({
+    index: CATALOG_ALIAS,
+    _source: ['embedding', 'embeddingModel', 'revision'],
+    body: { ids: [...revisions.keys()] },
+  });
+  const matching = new Map<string, number[]>();
+  for (const hit of body.docs as {
+    _id: string;
+    _source?: { embedding?: number[]; embeddingModel?: string; revision: string };
+  }[]) {
+    const source = hit._source;
+    if (source?.embedding?.length === 384 && source.embeddingModel === embeddingModel &&
+      source.revision === revisions.get(hit._id)) {
+      matching.set(hit._id, source.embedding);
+    }
+  }
+  return matching;
+}
+
 export async function prepareIndexWrites(
   events: CatalogEvent[],
-  _existing?: Map<string, number[]>,
+  existing = new Map<string, number[]>(),
   signal?: AbortSignal
 ): Promise<IndexWrite[]> {
-  signal?.throwIfAborted();
+  const upserts = events.flatMap((event) =>
+    event.type === 'UPSERT' && event.document.active && !existing.has(event.productId) ? [event.document] : []);
+  const vectors = await embedMany(upserts.map(semanticText), signal);
+  let vector = 0;
   return events.map((event) => {
     const active = event.type === 'UPSERT' && event.document?.active;
     return {
       id: event.productId,
       version: event.eventId,
       document: active && event.document
-        ? searchDocument(event.document)
+        ? { ...searchDocument(event.document), embeddingModel, embedding: existing.get(event.productId) ?? vectors[vector++] }
         // Keep the deletion version past the OpenSearch delete tombstone TTL.
         : { id: event.productId, revision: event.eventId, active: false },
     };
