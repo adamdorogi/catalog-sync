@@ -17,7 +17,7 @@ const attribute = selection.refine((value) => {
 export const searchParams = z.object({
   q: z.string().trim().max(250).default(''),
   sku: selection.optional(),
-  mode: z.literal('lexical').default('lexical'),
+  mode: z.enum(['lexical', 'semantic', 'hybrid']).default('hybrid'),
   tier: z.enum(['RETAIL', 'TRADE', 'WHOLESALE']).default('RETAIL'),
   quantity: z.coerce.number().int().min(1).max(1_000_000).default(1),
   inStock: z.enum(['true', 'false', '1', '0']).default('false')
