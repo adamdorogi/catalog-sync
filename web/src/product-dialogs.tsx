@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Alert, Button, Col, Form, Modal, Row, Table } from 'react-bootstrap'
 import { api, errorMessage } from './api.js'
-import type { Product, SearchResult } from './api.js'
+import type { Hit, Product, SearchResult } from './api.js'
 
 const defaultWarehouses = ['BNE-01', 'SYD-02', 'MEL-01']
 
@@ -134,6 +134,45 @@ export function EditProduct({ product, defaultWarehouse, onHide, onIndexed, onPe
           <Button size="sm" type="submit" disabled={Boolean(status)}>Save changes</Button>
         </Modal.Footer>
       </Form>
+    </Modal>
+  )
+}
+
+export function ExplainScore({ hit, onHide }: { hit: Hit; onHide: () => void }) {
+  const [document, setDocument] = useState<Record<string, unknown>>()
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    const controller = new AbortController()
+    void api.get<{ document: Record<string, unknown> }>(`/search/documents/${hit.product.id}`, { signal: controller.signal })
+      .then(({ data }) => setDocument(data.document))
+      .catch((failure) => {
+        if (!controller.signal.aborted) setError(errorMessage(failure))
+      })
+    return () => controller.abort()
+  }, [hit.product.id])
+
+  const score = hit.score
+  const precision = (value: number | null) => value == null ? '-' : value.toFixed(6)
+
+  return (
+    <Modal show onHide={onHide} size="lg" scrollable>
+      <Modal.Header closeButton><Modal.Title as="h2" className="h5">Score Explain</Modal.Title></Modal.Header>
+      <Modal.Body>
+        <p><code>{hit.product.sku}</code> <span className="ms-2">{hit.product.title}</span></p>
+        <Table bordered striped size="sm">
+          <thead><tr><th scope="col">Signal</th><th scope="col">Rank</th><th scope="col">Score</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">BM25 lexical</th><td>{score.lexicalRank ?? '-'}</td><td>{precision(score.lexicalScore)}</td></tr>
+            <tr><th scope="row">Vector k-NN</th><td>{score.vectorRank ?? '-'}</td><td>{precision(score.vectorScore)}</td></tr>
+            <tr><th scope="row">RRF (k=60)</th><td>-</td><td>{precision(score.rrfScore)}</td></tr>
+          </tbody>
+        </Table>
+        <h3 className="h6">Indexed document</h3>
+        {error && <p className="small text-muted">{error}</p>}
+        <pre className="detail-json border bg-light p-2 mb-0">{JSON.stringify(document ?? hit.indexedDocument, null, 2)}</pre>
+      </Modal.Body>
+      <Modal.Footer><Button size="sm" variant="secondary" onClick={onHide}>Close</Button></Modal.Footer>
     </Modal>
   )
 }

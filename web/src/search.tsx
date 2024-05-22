@@ -1,9 +1,14 @@
 import { useEffect, useId, useState } from 'react'
 import { Alert, Button, Card, Col, Form, InputGroup, Row, Spinner, Stack, Table } from 'react-bootstrap'
 import { amount, api, errorMessage, formatPrice } from './api.js'
-import type { Bucket, Hit, SearchResult, Tier } from './api.js'
-import { EditProduct } from './product-dialogs.js'
+import type { Bucket, Hit, Mode, SearchResult, Tier } from './api.js'
+import { EditProduct, ExplainScore } from './product-dialogs.js'
 
+const modes: { value: Mode; label: string }[] = [
+  { value: 'hybrid', label: 'Hybrid RRF' },
+  { value: 'lexical', label: 'BM25 Lexical' },
+  { value: 'semantic', label: 'Vector k-NN' },
+]
 const warehouses = ['BNE-01', 'SYD-02', 'MEL-01']
 const pageSize = 25
 
@@ -42,9 +47,10 @@ function Facet({ title, buckets, selected, onToggle }: {
   )
 }
 
-function ProductRow({ hit, onEdit }: {
+function ProductRow({ hit, onEdit, onExplain }: {
   hit: Hit
   onEdit: (hit: Hit) => void
+  onExplain: (hit: Hit) => void
 }) {
   const stock = new Map(hit.product.inventory.map((item) => [
     item.warehouseCode,
@@ -70,6 +76,12 @@ function ProductRow({ hit, onEdit }: {
           >
             <i className="bi bi-pencil-square me-1" aria-hidden="true" /> Edit
           </Button>
+          <Button
+            size="sm" variant="outline-secondary" onClick={() => onExplain(hit)}
+            aria-label={`Explain score for ${hit.product.sku}`}
+          >
+            Explain
+          </Button>
         </Stack>
       </td>
     </tr>
@@ -78,6 +90,7 @@ function ProductRow({ hit, onEdit }: {
 
 export function CatalogSearch() {
   const [q, setQuery] = useState('')
+  const [mode, setMode] = useState<Mode>('hybrid')
   const [tier, setTier] = useState<Tier>('RETAIL')
   const [inStock, setInStock] = useState(false)
   const [warehouse, setWarehouse] = useState('')
@@ -94,12 +107,13 @@ export function CatalogSearch() {
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [editing, setEditing] = useState<Hit>()
+  const [explaining, setExplaining] = useState<Hit>()
 
   useEffect(() => {
     const controller = new AbortController()
     const timer = window.setTimeout(() => {
       const params = new URLSearchParams({
-        q: q.trim(), mode: 'lexical', tier, inStock: String(inStock),
+        q: q.trim(), mode, tier, inStock: String(inStock),
         page: String(page), pageSize: String(pageSize),
         quantity: String(Math.max(1, Math.trunc(Number(quantity) || 1))),
       })
@@ -127,7 +141,7 @@ export function CatalogSearch() {
       window.clearTimeout(timer)
       controller.abort()
     }
-  }, [q, tier, inStock, warehouse, categories, brands, attributes, quantity, minPrice, maxPrice, page, refresh])
+  }, [q, mode, tier, inStock, warehouse, categories, brands, attributes, quantity, minPrice, maxPrice, page, refresh])
 
   const facets = result?.facets
   const maxPage = Math.max(1, Math.ceil(Math.min(result?.total ?? 0, 10_000) / pageSize))
@@ -225,6 +239,13 @@ export function CatalogSearch() {
                     value={q} onChange={(event) => { setQuery(event.target.value); setPage(1) }} />
                   <Button type="submit" variant="primary">Search</Button>
                 </InputGroup>
+                <fieldset className="small">
+                  <legend className="visually-hidden">Search mode</legend>
+                  {modes.map(({ value, label }) => (
+                    <Form.Check inline key={value} id={`mode-${value}`} type="radio" name="mode" label={label}
+                      checked={mode === value} onChange={() => { setMode(value); setPage(1) }} />
+                  ))}
+                </fieldset>
               </Form>
             </Card.Body>
           </Card>
@@ -257,7 +278,7 @@ export function CatalogSearch() {
               </thead>
               <tbody>
                 {result?.hits.map((hit) => (
-                  <ProductRow key={hit.product.id} hit={hit} onEdit={setEditing} />
+                  <ProductRow key={hit.product.id} hit={hit} onEdit={setEditing} onExplain={setExplaining} />
                 ))}
                 {result?.hits.length === 0 && (
                   <tr><td colSpan={7} className="text-muted py-3">No matching products.</td></tr>
@@ -289,6 +310,7 @@ export function CatalogSearch() {
             setRefresh((value) => value + 1)
           }} />
       )}
+      {explaining && <ExplainScore hit={explaining} onHide={() => setExplaining(undefined)} />}
     </>
   )
 }
