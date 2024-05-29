@@ -70,4 +70,7 @@ The old index remains available for in-flight reads and manual cleanup.
 
 ## ranking
 
-Normalize SKU and manufacturer part numbers to match with or without hyphens.
+Normalize separators for exact part matches and edge n-grams. Explicit part
+matches take priority. Reciprocal rank fusion uses `1 / (60 + rank)` per list,
+which avoids mixing OpenSearch BM25 and k-NN score scales. Compare modes with
+the 40-query benchmark. A cached query skips repeat model inference.

@@ -34,6 +34,11 @@ Tier pricing uses the highest minimum quantity that the order qualifies for.
 Availability is on-hand stock less reserved stock. Warehouse and in-stock
 filters apply to the same inventory rows.
 
+Hybrid search fuses up to 200 lexical and 200 vector candidates. Exact
+normalized part numbers get priority. Open the Explain dialog to see the
+ranks, scores, and indexed document. Lexical pages use the 10,000-row
+OpenSearch result window. Apply a facet to narrow a larger result set.
+
 ## Supplier CSV
 
 Upload in the console or use the multipart endpoint.
@@ -46,6 +51,7 @@ FAST-HXN-SS316-M12,BNE-01,180,10,102
 ```sh
 curl -F file=@supplier.csv http://127.0.0.1:4000/api/imports/csv
 npm run simulate:load -- --once --count=500
+npm run eval:search
 npm test
 ```
 
@@ -81,6 +87,10 @@ needs the authenticated proxy to supply that header.
 Six Kafka partitions allow six indexing consumers in one group. Scale
 `worker` with Compose. The relay uses row locks to share work and preserve
 ordering for each product. Change topic partition counts deliberately.
+
+The local MiniLM model is downloaded once and cached. Set `EMBEDDING_PROVIDER=openai` and
+`OPENAI_API_KEY` to use OpenAI embeddings. Reindex with the new provider before
+reopening vector queries so the query and index use the same embedding space.
 
 ## Notes
 
