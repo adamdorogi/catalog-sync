@@ -34,7 +34,7 @@ x-service: &service
 
 services:
   postgres:
-    image: postgres:14-alpine
+    image: postgres:16-alpine
     environment:
       POSTGRES_DB: catalog
       POSTGRES_USER: catalog
@@ -50,7 +50,7 @@ services:
       retries: 25
 
   redpanda:
-    image: docker.redpanda.com/redpandadata/redpanda:v23.1.13
+    image: docker.redpanda.com/redpandadata/redpanda:v24.3.18
     command:
       - redpanda
       - start
@@ -71,7 +71,7 @@ services:
       retries: 30
 
   opensearch:
-    image: opensearchproject/opensearch:2.6.0
+    image: opensearchproject/opensearch:2.17.1
     environment:
       discovery.type: single-node
       DISABLE_INSTALL_DEMO_CONFIG: "true"
@@ -123,7 +123,7 @@ services:
       context: .
       dockerfile: docker/Dockerfile.web
       args:
-        VITE_CATALOG_ENV: ${VITE_CATALOG_ENV:-PROD}
+        VITE_CATALOG_ENV: ${PROD_VITE_CATALOG_ENV:-PROD}
     ports:
       - "127.0.0.1:${CATALOG_WEB_PORT:-8080}:80"
     depends_on:

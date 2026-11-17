@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "engines": {
-    "node": "18.x"
+    "node": "22.x"
   },
   "workspaces": [
     "packages/*",
@@ -13,7 +13,7 @@
   ],
   "scripts": {
     "db:migrate": "tsx scripts/migrate.ts",
-    "test": "vitest run --threads=false",
+    "test": "vitest run --maxWorkers=2 --minWorkers=1",
     "typecheck": "tsc --noEmit && npm run typecheck -w @catalog-sync/web",
     "dev:api": "npm run dev -w @catalog-sync/api",
     "dev:worker": "npm run dev -w @catalog-sync/worker",
@@ -22,17 +22,20 @@
     "dev": "node scripts/dev.mjs",
     "dev:web": "npm run dev -w @catalog-sync/web",
     "build": "npm run build -w @catalog-sync/web",
-    "eval:search": "tsx scripts/eval-search.ts"
+    "eval:search": "tsx scripts/eval-search.ts",
+    "test:integration": "vitest run --maxWorkers=2 --minWorkers=1"
+  },
+  "dependencies": {
+    "tsx": "4.21.0"
   },
   "devDependencies": {
-    "@types/node": "18.15.11",
+    "@types/node": "22.19.0",
     "@types/pg": "8.6.6",
-    "tsx": "3.12.6",
-    "typescript": "~4.9.5",
-    "vitest": "0.29.2",
+    "typescript": "5.9.3",
+    "vitest": "3.2.6",
     "@types/cors": "2.8.13",
     "@types/express": "4.17.17",
-    "@types/multer": "1.4.7",
-    "vite": "4.1.4"
+    "@types/multer": "2.0.0",
+    "vite": "6.4.6"
   }
 }
