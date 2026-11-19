@@ -12,7 +12,7 @@ export default defineConfig(({ mode }) => {
       port: 5173,
       strictPort: true,
       proxy: {
-        '/api': env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:4000',
+        '/api': env.VITE_API_PROXY_TARGET || `http://127.0.0.1:${env.API_PORT || '4000'}`,
       },
     },
   }

@@ -1,6 +1,6 @@
-import {seedExamples} from '@catalog-sync/shared';
+import {config, seedExamples} from '@catalog-sync/shared';
 
-const baseUrl = process.env.CATALOG_API_URL ?? 'http://127.0.0.1:4000';
+const baseUrl = process.env.CATALOG_API_URL ?? `http://127.0.0.1:${config.port}`;
 const modes = ['lexical', 'semantic', 'hybrid'] as const;
 const cases = seedExamples.map((example, index) => ({
   sku: example.sku,

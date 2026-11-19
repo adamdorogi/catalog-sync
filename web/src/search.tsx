@@ -271,7 +271,7 @@ export function CatalogSearch() {
                   <th scope="col">Part / Title</th>
                   <th scope="col">Brand</th>
                   <th scope="col">Category</th>
-                  <th scope="col" className="text-nowrap">Stock <small>(BNE / SYD / MEL)</small></th>
+                  <th scope="col" className="text-nowrap">Stock <small className="d-block fw-normal">(BNE / SYD / MEL)</small></th>
                   <th scope="col" className="text-end text-nowrap">Tier Price</th>
                   <th scope="col">Actions</th>
                 </tr>

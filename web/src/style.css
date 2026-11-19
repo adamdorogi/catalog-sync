@@ -1,5 +1,6 @@
 body {
   background: #f8f9fa;
+  --bs-code-color: #25476f;
 }
 
 .shell {
@@ -20,14 +21,19 @@ body {
   text-underline-offset: .35em;
 }
 
+.catalog-table {
+  font-size: .875rem;
+  line-height: 1.35;
+}
+
 .catalog-table th,
 .catalog-table td {
-  padding: .43rem .55rem;
+  padding: .36rem .45rem;
   vertical-align: middle;
 }
 
+.catalog-table .btn,
 .catalog-table code {
-  color: #25476f;
   white-space: nowrap;
 }
 

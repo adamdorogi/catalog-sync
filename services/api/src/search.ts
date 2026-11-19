@@ -153,11 +153,11 @@ async function searchOne(body: Clause) {
   return validateResponse(response.body as RawSearch);
 }
 
-async function searchBatch(...bodies: Clause[]) {
-  const response = await searchClient.msearch({
-    index: CATALOG_ALIAS,
-    body: bodies.flatMap((body) => [{}, body]),
-  });
+async function searchBatch(queries: Clause[], facets?: Clause) {
+  const body = queries.flatMap((query) => [{}, query]);
+  // Keep facet counts reusable across pages and let index refreshes invalidate them.
+  if (facets) body.push({request_cache: true}, facets);
+  const response = await searchClient.msearch({index: CATALOG_ALIAS, body});
   return (response.body.responses as RawSearch[]).map(validateResponse);
 }
 
@@ -179,11 +179,20 @@ export async function searchCatalog(params: SearchParams) {
   let facetResult: RawFacets | undefined;
 
   if (!params.q || params.mode === 'lexical') {
-    result = await searchOne({
-      query: textQuery, post_filter: postFilter, aggs: aggregations, sort,
+    const body = {
+      query: textQuery, post_filter: postFilter, sort,
       from, size: params.pageSize, track_total_hits: true, _source: source,
       docvalue_fields: params.q ? exactFields : undefined,
-    });
+    };
+    if (aggregations) {
+      const [words, facets] = await searchBatch([body], {
+        query: textQuery, size: 0, track_total_hits: false, aggs: aggregations,
+      });
+      result = words;
+      facetResult = facets.aggregations;
+    } else {
+      result = await searchOne(body);
+    }
     const normalized = normalizeSku(params.q);
     total = result.hits.total?.value ?? 0;
     hits = result.hits.hits.map((hit, index) => presentHit(hit, {
@@ -192,17 +201,17 @@ export async function searchCatalog(params: SearchParams) {
       lexicalScore: hit._score,
       exactPartMatch: exactPartMatch(hit, normalized),
     }, params));
-    facetResult = result.aggregations;
   } else {
     const vector = await queryVector(params.q);
     const knn = {knn: {embedding: {vector, k: rankWindow, filter: {bool: {filter: [...base, ...selected]}}}}};
     const vectorRequest = {query: knn, sort, track_total_hits: true};
-    const facetsRequest = {size: 0, query: {bool: {filter: base}}, aggs: aggregations, track_total_hits: false};
-    const facetRequests = aggregations ? [facetsRequest] : [];
+    const facetsRequest = aggregations
+      ? {size: 0, query: {bool: {filter: base}}, aggs: aggregations, track_total_hits: false}
+      : undefined;
 
     if (params.mode === 'semantic') {
       const body = {...vectorRequest, from, size: Math.min(params.pageSize, Math.max(0, rankWindow - from)), _source: source};
-      const [vectors, facets] = await searchBatch(body, ...facetRequests);
+      const [vectors, facets] = await searchBatch([body], facetsRequest);
       result = vectors;
       total = Math.min(rankWindow, vectors.hits.total?.value ?? vectors.hits.hits.length);
       hits = vectors.hits.hits.map((hit, index) => presentHit(hit, {
@@ -210,10 +219,10 @@ export async function searchCatalog(params: SearchParams) {
       }, params));
       facetResult = facets?.aggregations;
     } else {
-      const [words, vectors, facets] = await searchBatch({
+      const [words, vectors, facets] = await searchBatch([{
         query: textQuery, post_filter: postFilter, size: rankWindow, sort,
         _source: false, docvalue_fields: exactFields, track_total_hits: false,
-      }, {...vectorRequest, size: rankWindow, _source: false}, ...facetRequests);
+      }, {...vectorRequest, size: rankWindow, _source: false}], facetsRequest);
       result = words.hits.hits.length ? words : vectors;
       const ranked = fuseRanks(words.hits.hits, vectors.hits.hits, params.q);
       const page = ranked.slice(from, from + params.pageSize);
