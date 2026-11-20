@@ -67,7 +67,12 @@ integration('catalog pipeline through HTTP', () => {
 
     const hybrid = await request<SearchResult>(`${lexical.replace('mode=lexical', 'mode=hybrid')}&sku=${sku}`);
     expect(hybrid.hits[0]).toMatchObject({
-      product: { sku, inventory: expect.arrayContaining([{ warehouseCode: 'BNE-01', onHand, reserved: expect.any(Number) }]) },
+      product: {
+        sku,
+        inventory: expect.arrayContaining([
+          expect.objectContaining({ warehouseCode: 'BNE-01', onHand, reserved: expect.any(Number) }),
+        ]),
+      },
       unitPriceCents: basePriceCents,
       score: { exactPartMatch: true, lexicalRank: 1, vectorRank: expect.any(Number) },
     });
