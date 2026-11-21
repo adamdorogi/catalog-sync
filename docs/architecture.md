@@ -64,7 +64,8 @@ a 3s heartbeat interval.
 The reindex worker sets up a timestamped target, then reads products by ID in
 1,000-row chunks. While that job runs, the consumer writes both the current
 alias and the target. External versions settle overlap between snapshot rows
-and new updates. An exclusive Postgres advisory lock pauses target selection
+and new updates. Snapshot rows reuse vectors when the indexed revision and
+embedding model match. An exclusive Postgres advisory lock pauses target selection
 while the worker refreshes the new index and sends one `_aliases` request.
 The old index remains available for in-flight reads and manual cleanup.
 
@@ -73,4 +74,5 @@ The old index remains available for in-flight reads and manual cleanup.
 Normalize separators for exact part matches and edge n-grams. Explicit part
 matches take priority. Reciprocal rank fusion uses `1 / (60 + rank)` per list,
 which avoids mixing OpenSearch BM25 and k-NN score scales. Compare modes with
-the 40-query benchmark. A cached query skips repeat model inference.
+the 40-query benchmark. A cached query skips repeat model inference. A
+separate facets subquery reuses the OpenSearch request cache until refresh.

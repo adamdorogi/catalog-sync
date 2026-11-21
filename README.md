@@ -4,11 +4,13 @@ Postgres -> Kafka -> OpenSearch catalog and inventory sync pipeline with a
 Bootstrap search and ops console. Stock and customer-tier prices are committed
 with an outbox event. Search reads from the `catalog_current` alias.
 
+![Catalog search and stock edit](docs/demo/catalog-search.gif)
 
+![Kafka lag and alias rotation](docs/demo/ops-pipeline.gif)
 
 ## Local dev
 
-Node 18, npm, and Docker Compose v2.
+Node 22, npm, and Docker Compose v2.
 
 ```sh
 cp .env.example .env
@@ -38,6 +40,14 @@ Hybrid search fuses up to 200 lexical and 200 vector candidates. Exact
 normalized part numbers get priority. Open the Explain dialog to see the
 ranks, scores, and indexed document. Lexical pages use the 10,000-row
 OpenSearch result window. Apply a facet to narrow a larger result set.
+
+One run of the 40-query benchmark against the 15,000-SKU seed:
+
+| Mode | MRR@10 | Recall@10 |
+| --- | ---: | ---: |
+| Lexical | 0.650 | 0.650 |
+| Semantic | 0.508 | 0.550 |
+| Hybrid | 0.875 | 0.875 |
 
 ## Supplier CSV
 
@@ -74,7 +84,8 @@ migration to load the snapshot. The web port defaults to `8080`.
 
 Use `DATABASE_URL`, `KAFKA_BROKERS`, and `OPENSEARCH_NODE` for standalone
 processes. Compose accepts the same names prefixed with `PROD_` for external
-services. Set `KAFKA_TLS=true` and `KAFKA_SASL_USERNAME` /
+services. If you change the bundled `POSTGRES_PASSWORD`, set the matching
+database URL with the password URL-encoded. Set `KAFKA_TLS=true` and `KAFKA_SASL_USERNAME` /
 `KAFKA_SASL_PASSWORD` for authenticated Kafka. Choose `plain`,
 `scram-sha-256`, or `scram-sha-512` via `KAFKA_SASL_MECHANISM`.
 `OPENSEARCH_USERNAME` and `OPENSEARCH_PASSWORD` enable basic authentication.
@@ -88,7 +99,8 @@ Six Kafka partitions allow six indexing consumers in one group. Scale
 `worker` with Compose. The relay uses row locks to share work and preserve
 ordering for each product. Change topic partition counts deliberately.
 
-The local MiniLM model is downloaded once and cached. Set `EMBEDDING_PROVIDER=openai` and
+The local MiniLM model is downloaded once and cached. The Alpine service image
+runs its WebAssembly backend. Set `EMBEDDING_PROVIDER=openai` and
 `OPENAI_API_KEY` to use OpenAI embeddings. Reindex with the new provider before
 reopening vector queries so the query and index use the same embedding space.
 
